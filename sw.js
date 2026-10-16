@@ -1,5 +1,5 @@
 // Offline support: page is fetched fresh when online (so updates show up), cached copy used in the gym with no signal.
-const CACHE = 'liftlog-v1';
+const CACHE = 'liftlog-v2';
 const FILES = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });

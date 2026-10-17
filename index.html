@@ -35,6 +35,12 @@ button{font:inherit;cursor:pointer}
 .go{color:var(--ac);font-weight:600;white-space:nowrap}
 .muted{color:var(--mu);font-size:14px}
 .card{background:var(--card);border-radius:12px;padding:14px;margin:10px 0}
+.live{border:2px solid var(--ac);border-radius:20px;padding:6px 10px 2px;margin:12px 0;background:#3b8cff0f}
+.live .lh{display:flex;align-items:center;gap:8px;padding:6px 4px 0;font-size:13px;font-weight:700;color:var(--ac);text-transform:uppercase;letter-spacing:.06em}
+.live .lh .dotp{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.live .row.fin b{color:var(--ok)}
+.live .btn.wide{margin:8px 0 10px}
+.startbtn{font-size:18px;padding:16px;margin:12px 0 4px}
 .card.hi{border:1px solid var(--ac);display:flex;align-items:center;gap:12px}.card.hi>div{flex:1}
 .sec{margin:22px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);font-weight:600;display:flex;align-items:center;gap:8px}
 .sec .sp{flex:1}
@@ -428,7 +434,7 @@ const train = type => () => {
   for (const r of rs) {
     if (!r.workouts.length) continue;
     h += `<div class="sec">${esc(r.name)}</div>`;
-    for (const w of r.workouts) h += `<div class="row" onclick="A.start('${r.id}','${w.id}')"><div><b>${esc(w.name)}</b><div class="muted clamp">${w.items.length ? esc(w.items.map(i => ex(i.exId).name).join(', ')) : 'No exercises yet'}</div></div><span class="go">Start ›</span></div>`;
+    for (const w of r.workouts) h += `<div class="row" onclick="go('workout',{rid:'${r.id}',wid:'${w.id}'})"><div><b>${esc(w.name)}</b><div class="muted clamp">${w.items.length ? esc(w.items.map(i => ex(i.exId).name).join(', ')) : 'No exercises yet'}</div></div><span class="go">›</span></div>`;
   }
   const recent = S.sessions.filter(s => s.id !== S.active && (s.type || 'lift') === type).sort((x, y) => sortKey(x) < sortKey(y) ? 1 : -1).slice(0, 5);
   if (recent.length) { h += `<div class="sec">Recent</div>`; for (const s of recent) h += sessRow(s); }
@@ -452,14 +458,17 @@ V.session = ({ id }) => {
     h += `<label class="f"><span>Calories burned ${s.cal == null ? '' : s.calSrc === 'manual' ? '(entered by you)' : '(estimated)'}${dur ? ' · ' + dur + ' min workout' : ''}</span>
       <div class="calbox"><input type="number" inputmode="numeric" value="${s.cal ?? ''}" placeholder="${est ?? 'kcal'}" onchange="A.setCal('${id}',this.value)">${est != null ? `<button class="btn sm" onclick="A.setCal('${id}','est')">Estimate</button>` : ''}</div></label>`;
   }
+  if (live) h += `<div class="live"><div class="lh"><span class="dotp"></span>Workout in progress</div>`;
   if (!s.entries.length) h += `<div class="empty">No exercises yet. Add some below.</div>`;
   s.entries.forEach((e, i) => {
     const d = doneSets(e), t = tOf(e.exId), b = t === 'lift' ? bestOrm(d) : 0;
     const sub = live ? `${d.length}/${e.sets.length} sets done${b ? ' · best 1RM ' + Math.round(b) : ''}`
       : (d.length ? d.map(x => fmtSet(e, x)).join(', ') + (b ? ' · 1RM ' + Math.round(b) : '') : 'No sets logged');
-    h += `<div class="row" onclick="go('log',{sid:'${id}',i:${i}})"><div><b>${esc(ex(e.exId).name)}${tag(t)}</b><div class="muted clamp">${esc(sub)}</div></div><span class="go">›</span></div>`;
+    const fin = live && e.sets.length && d.length === e.sets.length;
+    h += `<div class="row ${fin ? 'fin' : ''}" onclick="go('log',{sid:'${id}',i:${i}})"><div><b>${fin ? '✓ ' : ''}${esc(ex(e.exId).name)}${tag(t)}</b><div class="muted clamp">${esc(sub)}</div></div><span class="go">›</span></div>`;
   });
   h += `<button class="btn wide" onclick="go('picker',{mode:'session',sid:'${id}',type:'${s.type || 'lift'}'})">+ Add exercises</button>`;
+  if (live) h += `</div>`;
   if (live) h += `<div class="btns"><button class="btn danger" onclick="A.discard('${id}')">Discard</button><button class="btn ok" onclick="A.finish('${id}')">Finish workout</button></div>`;
   else h += `<button class="btn wide danger" onclick="A.delS('${id}')">Delete this workout</button>`;
   return h + '</main>';
@@ -658,13 +667,17 @@ V.workout = ({ rid, wid }) => {
   const r = S.routines.find(r => r.id === rid), w = r && r.workouts.find(w => w.id === wid);
   if (!w) return hdr('Workout', true) + '<div class="empty">Deleted.</div></main>';
   let h = hdr(esc(w.name), true, `<button class="ic" onclick="A.renameW('${rid}','${wid}')" aria-label="Rename">✎</button>`);
+  const a = S.active && getS(S.active);
+  h += a ? `<button class="btn wide pri startbtn" onclick="go('session',{id:'${a.id}'})">Continue workout in progress</button>`
+    : `<button class="btn wide ok startbtn" onclick="A.start('${rid}','${wid}')" ${w.items.length ? '' : 'disabled style="opacity:.4"'}>▶ Start ${esc(w.name)}</button>`;
+  h += `<div class="muted">${esc(r.name)} · ${w.items.length} exercise${w.items.length === 1 ? '' : 's'}</div>`;
   if (!w.items.length) h += `<div class="empty">No exercises yet.</div>`;
   w.items.forEach((it, k) => {
-    h += `<div class="row" style="cursor:default"><div><b>${esc(ex(it.exId).name)}${tag(tOf(it.exId))}</b><div class="stepper" style="margin-top:6px"><button onclick="A.itemSets('${rid}','${wid}',${k},-1)">−</button><b>${it.sets}</b><button onclick="A.itemSets('${rid}','${wid}',${k},1)">+</button><span class="muted">sets</span></div></div>
+    const p = prevFor(it.exId), last = p ? `${fmtShort(p.s.date)}: ${doneSets(p.e).map(x => fmtSet(p.e, x)).join(', ')}` : 'Not done yet';
+    h += `<div class="row" style="cursor:default"><div><b>${esc(ex(it.exId).name)}${tag(tOf(it.exId))}</b><div class="muted clamp">Last ${esc(last)}</div><div class="stepper" style="margin-top:6px"><button onclick="A.itemSets('${rid}','${wid}',${k},-1)">−</button><b>${it.sets}</b><button onclick="A.itemSets('${rid}','${wid}',${k},1)">+</button><span class="muted">sets</span></div></div>
       <button class="small-ic" onclick="A.moveItem('${rid}','${wid}',${k},-1)" aria-label="Move up">▲</button><button class="small-ic" onclick="A.moveItem('${rid}','${wid}',${k},1)" aria-label="Move down">▼</button><button class="small-ic" onclick="A.rmItem('${rid}','${wid}',${k})" aria-label="Remove">✕</button></div>`;
   });
   h += `<button class="btn wide" onclick="go('picker',{mode:'workout',rid:'${rid}',wid:'${wid}',type:'${r.type || 'lift'}'})">+ Add exercises</button>`;
-  h += `<button class="btn wide pri" onclick="A.start('${rid}','${wid}')">Start this workout</button>`;
   h += `<button class="btn wide danger" onclick="A.delWorkout('${rid}','${wid}')">Delete this day</button>`;
   return h + '</main>';
 };

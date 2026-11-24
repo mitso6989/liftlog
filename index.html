@@ -157,6 +157,21 @@ async function saveNow() {
   });
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
+// set fields: tapping one empties it for typing (old value stays as a grey hint); leaving it empty puts the old value back
+const SET_INPUT = '.sets .sr input';
+document.addEventListener('focusin', e => {
+  const i = e.target;
+  if (!i.matches || !i.matches(SET_INPUT)) return;
+  i.dataset.orig = i.value; i.dataset.ph = i.placeholder;
+  if (i.value !== '') { i.placeholder = i.value; i.value = ''; }
+});
+document.addEventListener('focusout', e => {
+  const i = e.target;
+  if (!i.matches || !i.matches(SET_INPUT) || i.dataset.orig == null) return;
+  if (i.value === '' && i.dataset.orig !== '') { i.value = i.dataset.orig; i.dispatchEvent(new Event('input', { bubbles: true })); }
+  i.placeholder = i.dataset.ph || '';
+  delete i.dataset.orig; delete i.dataset.ph;
+});
 
 /* ---------- seed exercises ---------- */
 const SEED = {
